@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Rock Paper Scissors Online</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+</head>
+<body>
+
+<style>
+	.winTable{
+		border: 1px solid black;
+   		border-collapse: collapse;
+	}
+
+	.winTable th{
+		border: 1px solid black;
+	}
+
+	.winTable td{
+		border: 1px solid black;
+		padding-right:4px;
+		padding-left:4px;
+		padding-bottom:12px;
+		padding-top:0px;
+		margin-top: 12px;
+		height: 20px;
+		max-width: 40px;
+		vertical-align: top;
+	}
+
+	div.centered {
+    	text-align: center;
+	}
+
+	div.centered table {
+    	margin: 0 auto; 
+    	text-align: left;
+	}
+
+	.playTable {
+		table-layout: fixed;
+		width: 300px;
+	}
+
+	#rps {
+		display:none;
+	}
+
+	.lobby{
+    	text-align: center;
+    	padding-top: 25%;
+	}
+
+	#waitingScreen {
+		display:none;
+		text-align: center;
+    	padding-top: 25%;
+	}
+
+	#chatWindow{
+		height: 30%;
+		width: 30%;
+		position: fixed;
+		border-color: black;
+		border: solid;
+		border-width: thin;
+		flex-direction:column;
+	}
+
+	#mainMessages{
+		height:80%;
+		width: 100%;
+		overflow-y:auto; 
+    	overflow-x:hidden;
+    	flex: 1;
+    	display: flex;
+  		flex-direction: column-reverse;
+	}
+
+	.chatBox{
+		border: solid;
+		border-color: rgb(130, 224, 255);
+		padding: 10px;
+		width: 70%;
+		margin-right: .5%;
+		display: inline;
+		border-width: thin;
+		height: 10%;
+	}
+
+	.chatButton{
+		/*width: 10%;*/
+		background:
+		rgb(130, 224, 255);
+		border: none;
+		padding: 20px;
+		display: inline;
+		width:23.6%;
+		/*margin: 1px;*/
+		/*height: 5%;*/
+	}
+
+	#messages {
+		text-align: left !important;
+		list-style-type: none;
+		margin: 0;
+		padding: 0;
+		word-wrap: break-word;  
+	}
+    #messages li{ 
+    	padding: 5px 10px;
+    	word-wrap: break-word; 
+    }
+      #messages li:nth-child(odd) {
+       background: #eee;
+       word-wrap: break-word; 
+   }
+</style>
+
+<script>
+	var rock = 'fa fa-hand-grab-o';
+	var paper = 'fa fa-hand-stop-o';
+	var scissors = 'fa fa-hand-scissors-o';
+	var thinking = 'fa fa-spinner fa-spin';
+	var wins = 0;
+	var losses = 0;
+	var draws = 0;
+	var username = '';
+	var roomNumber = -1;
+	var queueNumber = -1;
+
+	/*function pressGo()
+	{
+		setTimeout("setLoadImage()", 1000);
+		document.getElementById('left').setAttribute('class',aiDecide());
+		decideWinner(document.getElementById('left').getAttribute('class'), document.getElementById('right').getAttribute('class'));
+		setTimeout("setLoadImage", 1000);
+	}*/
+
+	function setLoadImage(){
+		$(left).attr('class', thinking);
+	}
+
+	function convertToDigit(hand) {
+		let num = 0;
+		switch(hand){
+			case rock:
+				num = 1;
+				break;
+			case scissors:
+				num = 2;
+				break;
+			case paper:
+				num = 3;
+				break;
+		}
+		return num;
+	}
+
+	function decideWinner(left,right){
+		let leftDigit = convertToDigit(left);
+		let rightDigit = convertToDigit(right);
+
+		if (leftDigit == rightDigit)
+		{
+			document.getElementById('endText').innerHTML = "Draw";
+			draws++;
+			document.getElementById('draws').innerHTML = draws;
+		}
+		else if ((leftDigit - rightDigit % 3) == 1)
+		{
+			document.getElementById('endText').innerHTML = "You WIN!";
+			wins++;
+			document.getElementById('wins').innerHTML = wins;
+		}
+		else
+		{
+			document.getElementById('endText').innerHTML = "You lost...";
+			losses++;
+			document.getElementById('losses').innerHTML = losses;
+		}
+
+		let winString = "";
+		let drawString = "";
+		let loseString = "";
+		addIs(wins, winString, 'winsTally');
+		addIs(losses, loseString, 'lossesTally');
+		addIs(draws, drawString, 'drawsTally');
+	}
+
+	function addIs(numberOf, string, tally){
+		for (var i = 1; i  < numberOf + 1; i++) {
+			string += "I"
+			if(i % 5 == 0)
+				string += "<br>";
+		}
+		if (string)
+			document.getElementById(tally).innerHTML = string;
+	}
+
+	function aiDecide(){
+    	let hand;
+    	let rand = Math.floor((Math.random() * 3) + 1)
+    	switch(rand)
+    	{
+    		case 1:
+    			hand = rock;
+    			break;
+    		case 2:
+    			hand = paper;
+    			break;
+    		case 3:
+    			hand = scissors;
+    			break;
+			default:
+				hand = thinking;
+				break;
+    	}
+    	return hand;
+    }
+
+	function display(loc, hand) {
+		document.getElementById(loc).setAttribute('class', hand);
+    	//document.getElementById(loc).class = hand;
+    }
+</script>
+
+<!-- Lobby Room -->
+<div id='lobbyScreen' class='centered lobby'>
+	Enter Username: <br>
+	<input id="usernameInput" type="text" name="username"><br><br>
+	<button id='findGameButton' style="font-size:14px">Find Game</button>
+</div>
+
+<!-- Waiting for players -->
+<div id='waitingScreen' class='centered'>
+	Waiting for players
+	<br><br><br>
+	<i id="waitingIcon" class="fa fa-spinner fa-spin" style="font-size:48px"></i>
+</div>
+
+<!-- Game Room -->
+<div id='rps' class='centered'>
+	<span>
+		<table class='playTable' style="display: inline;">
+			<tr>
+				<td id="enemy"></td>
+				<td></td>
+				<td id="user"></td>
+			</tr>
+
+			<tr>
+				<td>
+					<i class="fa fa-smile-o" style="font-size:48px;color:black"></i>
+				</td>
+				<td>
+				</td>
+				<td>
+					<i class="fa fa-smile-o" style="font-size:48px;color:black"></i>
+				</td>
+				<td>
+					<select id="selectHand" onchange="display('right', document.getElementById('selectHand').value);" >
+					  <option id="rock" value="fa fa-hand-grab-o">Rock</option>
+					  <option id="paper" value="fa fa-hand-stop-o">Paper</option>
+					  <option id="scissors" value="fa fa-hand-scissors-o">Scissors</option>
+					</select>
+				</td>
+			<br>
+			</tr>
+
+			<tr>
+				<td>
+					<i id="left" class="fa fa-spinner fa-spin" style="font-size:48px"></i>
+				</td>
+
+				<td>
+				&emsp;
+				&emsp;
+				&emsp;
+				</td>
+
+				<td>
+				<i id="right" class="fa fa-hand-grab-o" style="font-size:48px;color:black"></i>
+				</td>
+
+				<td>
+					<button id='goButton' style="font-size:24px"> GO!</button>
+				<td>
+			</tr>
+		</table>
+
+		<span id='chatWindow'>
+			<div id='mainMessages'>
+				<ul id='messages'></ul>
+			</div>
+			<div>
+				<input class='chatBox' id="textMessage" autocomplete="off" /><button id='chatButtonClick' class='chatButton'>Send</button>
+			</div>
+		</span>
+
+	</span>
+
+	<br>
+	<br>
+
+	<div id='endText'><br></div>
+
+	<br>
+	<br>
+
+	<table class="winTable">
+		<tr>
+			<td>Wins</td>
+			<td>Draws</td>
+			<td>Losses</td>
+		</tr>
+		<tr>
+			<td><div id="wins"></div></td>
+			<td><div id="draws"></div></td>
+			<td><div id="losses"></div></td>
+		</tr>
+		<tr>
+			<td><div id="winsTally"></div></td>
+			<td><div id="drawsTally"></div></td>
+			<td><div id="lossesTally"></div></td>
+		</tr>
+	</table>
+
+	<!-- Find New Game -->
+	<div id='findNewGameDiv' style='display: none'>
+		<br>
+		<button id='findNewGameButton'>Find New Game</button>
+	</div>
+</div>
+
+<script>
+	document.getElementById('rock').setAttribute('value', rock);
+	document.getElementById('paper').setAttribute('value', paper);
+	document.getElementById('scissors').setAttribute('value', scissors);
+	document.getElementById('wins').innerHTML = wins;
+	document.getElementById('draws').innerHTML = draws;
+	document.getElementById('losses').innerHTML = losses;
+</script>
+
+<script>
+	$(document).ready(function() {
+		var socket = io();
+		$(function () {
+			$('#findGameButton').click(function(){
+    			username = usernameInput.value;
+    			console.log('Username is now ' + username);
+    			/*$('#lobbyScreen').css({display: "none"});
+    			$('#waitingScreen').css({display: "block"});*/
+				socket.emit('nameSelected', username);
+			});
+
+			socket.on('displayLobby', function(){
+				$('#lobbyScreen').css({display: "none"});
+    			$('#waitingScreen').css({display: "block"});
+			});
+
+			socket.on('gameFound', function(players){
+				playerOne = players.playerOne;
+				playerTwo = players.playerTwo;
+				let oneOrTwo = -1;
+				if (playerOne == username){
+					console.log('Connected to ' + playerTwo);
+					oneOrTwo = 1;
+				}
+				else if(playerTwo == username){
+					console.log('Connected to ' + playerOne);
+					oneOrTwo = 2;
+				}
+
+				$('#lobbyScreen').css({display: "none"});
+    			$('#waitingScreen').css({display: "none"});
+    			$('#rps').css({display: "block"});
+
+    			if (oneOrTwo == 1)
+    				$('#enemy').html(playerTwo);
+    			else
+    				$('#enemy').html(playerOne);
+    			$('#user').html(username);
+			});
+
+			socket.on('goToLobby', function(hi){
+				console.log("Going to lobby!");
+    			username = '';
+    			resetGame();
+			})
+
+			$('#goButton').click(function(){
+				socket.emit('attackSelected', document.getElementById('right').getAttribute('class'));
+				$('#goButton').css({display: "none"});
+			});
+
+			$('#chatButtonClick').click(function(){
+				socket.emit('chatMessage', $('#textMessage').val());
+				$('#textMessage').val('');
+			});
+
+			$('#findNewGameDiv').click(function(){
+				socket.emit('disconnectFromGame', function() {});
+				socket.emit('nameSelected', username);
+			});
+
+			socket.on('chatMessage', function(msg){
+				/*console.log('Message recieved: ' + msg);*/
+     			$('#messages').append($('<li>').text(msg));
+    		});
+
+    		socket.on('findNewGameButton', function(msg){
+    			$('#findNewGameDiv').css({display: 'block'});
+    		});
+
+			socket.on('attacked', function(hand){
+				console.log("Attacked with " + hand);
+
+				$(left).attr('class', hand);
+				decideWinner(document.getElementById('left').getAttribute('class'), document.getElementById('right').getAttribute('class'));
+				$('#goButton').css({display: "block"});
+				setTimeout("setLoadImage()", 1000);
+			});
+
+			socket.on('nameAlreadyInUse', function(msg){
+				alert("Name already in use");
+			});
+
+			/*socket.on('countdown', function(number){
+				console.log(number);
+			});*/
+
+			function resetGame(){
+				document.getElementById('winsTally').innerHTML = '';
+				document.getElementById('lossesTally').innerHTML = '';
+				document.getElementById('drawsTally').innerHTML = '';
+				document.getElementById('endText').innerHTML = '';
+				document.getElementById('wins').innerHTML = '';
+				document.getElementById('draws').innerHTML = '';
+				document.getElementById('losses').innerHTML = '';
+				document.getElementById('messages').innerHTML = "";
+				$('#lobbyScreen').css({display: "block"});
+    			$('#waitingScreen').css({display: "none"});
+    			$('#rps').css({display: "none"});
+    			$('#findNewGameDiv').css({display: "none"});
+			}
+
+			// When you press enter
+			document.getElementById('textMessage').onkeypress = function(e){
+	   			if (!e) e = window.event;
+	    		var keyCode = e.keyCode || e.which;
+	    		if (keyCode == '13'){
+	      			// Enter pressed
+		      		socket.emit('chatMessage', $('#textMessage').val());
+					$('#textMessage').val('');
+		      		return false;
+	    		}
+    		}
+		});		
+	});
+</script>
+
+
+</body>
+</html> 
